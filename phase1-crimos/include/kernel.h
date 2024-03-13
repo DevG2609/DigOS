@@ -7,6 +7,8 @@
 #ifndef KERNEL_H
 #define KERNEL_H
 
+#ifndef ASSEMBLER
+
 #ifndef OS_NAME
 #define OS_NAME "MyOS"
 #endif
@@ -95,22 +97,12 @@ int kernel_get_log_level(void);
  * @param level - the log level to set
  * @return the kernel log level
  */
-int kernel_set_log_level(log_level_t level);
-
-/**
- * Triggers a kernel command for debugging
- * @param c command to execute
- */
-void kernel_command(char c);
-
-/**
- * Triggers a breakpoint (if running under GDB)
- */
-void kernel_break(void);
+int kernel_set_log_level(int level);
 
 /**
  * Exits the kernel
  */
 void kernel_exit(void);
 
+#endif
 #endif

@@ -4,14 +4,8 @@
  *
  * Keyboard Functions
  */
-#ifndef KEYBOARD_H
-#define KEYBOARD_H
-
-// Keyboard data port
-#define KBD_PORT_DATA           0x60
-
-// Keyboard status port
-#define KBD_PORT_STAT           0x64
+#ifndef KBD_H
+#define KBD_H
 
 // Special key definitions
 #define KEY_NULL                0x00
