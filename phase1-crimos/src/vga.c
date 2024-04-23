@@ -1,8 +1,3 @@
-/**
- * CPE/CSC 159 - Operating System Pragmatics
- * California State University, Sacramento
- *
- */
 #include <spede/machine/io.h>
 #include <spede/stdarg.h>
 #include <spede/stdio.h>
@@ -47,7 +42,7 @@ void vga_init(void) {
         // Enable the cursor
         vga_cursor_enable();
     } else {
-        // Disable the cursor by default the value of vga_cursor is 0
+        // Disable the cursor
         vga_cursor_disable();
     }
 

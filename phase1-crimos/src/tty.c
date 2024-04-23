@@ -12,60 +12,86 @@
 #include "tty.h"
 #include "vga.h"
 
-// local variable
-#define TTY_REFRESH_INTERVAL 10000 // Refresh interval in milliseconds
-#define TAB_WIDTH 4 // Tab width in spaces
-
 // TTY Table
 struct tty_t tty_table[TTY_MAX];
 
 // Current Active TTY
 struct tty_t *active_tty;
 
-// Flag to track whether echo is enabled
-int echo_enabled = 1; // 1 means echo is enabled by default
-
-
 /**
  * Sets the active TTY to the selected TTY number
  * @param tty - TTY number
  */
 void tty_select(int n) {
-    // Set the active tty to point to the entry in the tty table
-    // if a new tty is selected, the tty should trigger a refresh
-    if (n >= 0 && n < TTY_BUF_SIZE) {
-        active_tty = &tty_table[n];
-        active_tty->refresh = 1;
-    } else {
-        kernel_log_error("tty: Invalid TTY number %d", n);
+
+    // Ensure n is within the tty range
+    if (n < 0 || n >= TTY_MAX) {
+        kernel_panic("Invalid TTY %d", n);
     }
+
+    // Set the active tty to the n table entry 
+    active_tty = &tty_table[n];
+    kernel_log_info("tty[%d]: selected", n);
+
+    // Indicate that a refresh is needed
+    active_tty->refresh = 1;
+}
+
+/**
+ * Returns the active TTY identifier
+ * @return TTY id or -1 on error
+ */
+int tty_get_active(void) {
+
+    // If there isn't an active tty, return -1
+    if (!active_tty) {
+        return -1;
+    }
+
+    // Return the id of the active tty
+    return active_tty->id;
 }
 
 /**
  * Refreshes the tty if needed
  */
 void tty_refresh(void) {
+
+    // Ensure that a tty is active, otherwise nothing to refresh
     if (!active_tty) {
         kernel_panic("No TTY is selected!");
         return;
     }
 
-    // If the TTY needs to be refreshed, copy the tty buffer
-    // to the VGA output.
-    // ** hint: use vga_putc_at() since you are setting specific characters
-    //          at specific locations
-    // Reset the tty's refresh flag so we don't refresh unnecessarily
-    if (active_tty->refresh) {
-        for (int i = 0; i < TTY_HEIGHT; i++) {
-            for (int j = 0; j < TTY_WIDTH; j++) {
-                char c = active_tty->buf[i * TTY_WIDTH + j];
-                vga_putc_at(j, i, active_tty->color_bg, active_tty->color_fg, c);
+    // Set a pointer to the active tty 
+    struct tty_t *tty = active_tty;
+
+    // Check if a refresh is needed 
+    if (tty->refresh) {
+        kernel_log_debug("tty[%d]: refreshing", tty->id);
+
+        int x = 0;
+        int y = 0;
+
+        // Remember that x,y is our interpretation of a list of addresses
+        // Therefore we need to go through from 0 to TTY_WIDTH * TTY_HEIGHT to cover all addresses
+        // This goes through the entire display, character by character, to refresh display
+        for (int i = 0; i < TTY_WIDTH * TTY_HEIGHT; i++) {
+            // If x position has exceeded the width, return to position 0 and move to next row
+            if (x >= VGA_WIDTH) {
+                x = 0;  // Return x to 0
+                y++;    // Move to next row
             }
+
+            // Use the easy-to-use vga_putc_at to write the character
+            // This is writing at x,y coordinates the next i value in our tty buffer. 
+            vga_putc_at(x++, y, tty->color_bg, tty->color_fg, tty->buf[tty->pos_scroll*TTY_WIDTH + i]);
         }
-        active_tty->refresh = 0;
+
+        // The screen has been refreshed, so clea the refresh flag
+        tty->refresh = 0;
     }
 }
-
 
 /**
  * Updates the active TTY with the given character
@@ -75,84 +101,72 @@ void tty_update(char c) {
         return;
     }
 
-    // Since this is a virtual wrapper around the VGA display, treat each
-    // input character as you would for the VGA output
-    //   Adjust the x/y positions as necessary
-    //   Handle scrolling at the bottom
+    struct tty_t *tty = active_tty;
 
-    // Instead of writing to the VGA display directly, you will write
-    // to the tty buffer.
-    //
-    // If the screen should be updated, the refresh flag should be set
-    // to trigger the the VGA update via the tty_refresh callback
-    // Handle control characters
+//    kernel_log_debug("tty[%d]: input char=%c", tty->id, c);
+//    kernel_log_debug("  before scroll=%d, x=%d, y=%d", tty->pos_scroll, tty->pos_x, tty->pos_y);
+
     switch (c) {
-        case '\n': // New line
-            active_tty->pos_x = 0; // Reset x position to start of line
-            active_tty->pos_y++;   // Move to the next line
+        case '\t':  // Tab
+            tty->pos_x += 4 - tty->pos_x % 4;
             break;
-        case '\r': // Carriage return
-            active_tty->pos_x = 0; // Reset x position to start of line
-            break;
-        case '\b': // Backspace character
-            if (active_tty->pos_x > 0) {
-                active_tty->pos_x--; // Move back one position
-                active_tty->buf[active_tty->pos_y * TTY_WIDTH + active_tty->pos_x] = ' ';
+
+        case '\b':  // Backspace
+            if (tty->pos_x != 0) {
+                tty->pos_x--;
+            } else if (tty->pos_y != 0) {
+                tty->pos_y--;
+                tty->pos_x = TTY_WIDTH - 1;
             }
             break;
-        case '\t': // Tab character
-            active_tty->pos_x = (active_tty->pos_x + TAB_WIDTH) % TTY_WIDTH;
+
+        case '\r': // carriage return
+            tty->pos_x = 0;
             break;
-        default: // Regular character
-            active_tty->buf[active_tty->pos_y * TTY_WIDTH + active_tty->pos_x] = c;
-            active_tty->pos_x++; // Move to the next position
+
+        case '\n': // New Line
+            tty->pos_y++;
+            tty->pos_x = 0;
+            break;
+
+        default: // Output a character 
+            // pos_scroll is not implemented in this assignment so it will be 0. Otherwise
+            // it will act like a y (row) offset and needs to be multiplied by TTY_WIDTH to 
+            // get to the correct row. 
+            // Second half of formula is as expected... x + y * width
+            tty->buf[(tty->pos_scroll * TTY_WIDTH) + (tty->pos_x + tty->pos_y * TTY_WIDTH)] = c;
+
+            // Advance pos_x to the next spot
+            tty->pos_x++;
             break;
     }
 
-    // Handle scrolling
-    if (!active_tty->pos_scroll) {
-        if (active_tty->pos_x >= TTY_WIDTH) {
-            active_tty->pos_x = 0; // Move to the start of the next line
-            active_tty->pos_y++;   // Move to the next line
+    // If pos_y exceeds height, need to scroll... This does NOT implement pos_scroll but 
+    // still scrolls.
+    if (tty->pos_y >= TTY_HEIGHT) {
+        int x;
+        int y;
+
+        // For each column x...
+        for (x = 0; x < TTY_WIDTH; x++) {
+            // Go through row by row...
+            for (y = 1; y < TTY_HEIGHT; y++) { // Yes, starting at 1 on purpose... 
+                // Copy current column/row into previous column/row
+                tty->buf[TTY_WIDTH * (y - 1) + x] = tty->buf[TTY_WIDTH * y + x];
+            }
         }
-        if (active_tty->pos_y >= TTY_HEIGHT) {
-            active_tty->pos_y = 0; // Wrap to the top row
+
+        // Clear out last row (keep in mind that y is now at the last row)
+        for (x = 0; x < TTY_WIDTH; x++) {
+            tty->buf[TTY_WIDTH * (y - 1) + x] = ' ';
         }
-    } else {
-        if (active_tty->pos_x >= TTY_WIDTH) {
-            active_tty->pos_x = 0; // Move to the start of the next line
-            active_tty->pos_y++;   // Move to the next line
-            tty_scroll_up(); // Scroll up the contents of the TTY buffer
-        }
-        if (active_tty->pos_y >= TTY_HEIGHT) {
-            active_tty->pos_y = TTY_HEIGHT - 1; // Move to the last row
-        }
+
+        // Set pos_y to the last row
+        tty->pos_y = TTY_HEIGHT - 1;
     }
 
-    // Update the refresh flag
-    active_tty->refresh = 1;
-
-    // Echo the character if echo is enabled
-    if (echo_enabled) {
-        // Output the character to the TTY buffer
-        active_tty->pos_x--; // Move back to the previous position
-        active_tty->buf[active_tty->pos_y * TTY_WIDTH + active_tty->pos_x] = c;
-        active_tty->pos_x++; // Move back to the next position
-    }
-}
-
-void tty_scroll_up(void) {
-    // Copy each row of the TTY buffer to the row above it
-    for (int y = 1; y < TTY_HEIGHT; y++) {
-        for (int x = 0; x < TTY_WIDTH; x++) {
-            active_tty->buf[(y - 1) * TTY_WIDTH + x] = active_tty->buf[y * TTY_WIDTH + x];
-        }
-    }
-
-    // Clear the last row of the TTY buffer
-    for (int x = 0; x < TTY_WIDTH; x++) {
-        active_tty->buf[(TTY_HEIGHT - 1) * TTY_WIDTH + x] = ' ';
-    }
+//    kernel_log_debug("  after: scroll=%d, x=%d, y=%d", tty->pos_scroll, tty->pos_x, tty->pos_y);
+    tty->refresh = 1;
 }
 
 /**
@@ -162,17 +176,25 @@ void tty_scroll_up(void) {
 void tty_init(void) {
     kernel_log_info("tty: Initializing TTY driver");
 
-    // Initialize the tty_table
-    for (int i = 0; i < TTY_BUF_SIZE; ++i) {
-        tty_table[i].id = i;
-        tty_table[i].refresh = 0;
+    // void *memset(void *dest, int c, size_t count);
+    // Set first count bytes of dest to the value c. Value of c is converted to
+    // an unsigned char. Remeber that memset sets the bytes in a block of memory
+    // whereas malloc is used to allocate a block of memory. 
+    // In this case:
+    //  Initializing tty_table to 0
+    memset(tty_table, 0, sizeof(tty_table));
+
+    // Now fill in values for tty_table
+    for (int i = 0; i < TTY_MAX; i++) {
+        tty_table[i].id=i;
+        tty_table[i].color_bg = VGA_COLOR_BLACK;
+        tty_table[i].color_fg = VGA_COLOR_LIGHT_GREY;
     }
 
     // Select tty 0 to start with
-    active_tty = &tty_table[0];
+    tty_select(0);
 
-
-    // Register a timer callback to update the screen on a regular interval
-    timer_callback_register(tty_refresh, TTY_REFRESH_INTERVAL, -1);
+    // Update the screen on a regular interval (50 times per second right now)
+    timer_callback_register(tty_refresh, 2, -1);
 }
 

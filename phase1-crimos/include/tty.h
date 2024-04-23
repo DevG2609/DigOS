@@ -12,7 +12,7 @@
 #endif
 
 #ifndef TTY_SCROLLBACK
-#define TTY_SCROLLBACK  0   // Number of lines in the scrollback buffer
+#define TTY_SCROLLBACK  0   // Number of lines in the scrollback buffer. 0 if not implemented.
 #endif
 
 #define TTY_WIDTH       80  // Width of the TTY
@@ -36,7 +36,10 @@ typedef struct tty_t {
     int pos_x;                  // current x position in the screen
     int pos_y;                  // current y position in the screen
 
-    int pos_scroll;             // Current scrollback position in the buffer
+    int pos_scroll;             // Current scrollback position in the buffer 
+                                // If you choose to implement scrollbac, ensure that 
+                                // the text on each row will "scroll" upwareds when the last
+                                // row/column is reached
 } tty_t;
 
 /**
@@ -50,6 +53,12 @@ void tty_init(void);
  * @param tty - TTY number
  */
 void tty_select(int tty);
+
+/**
+ * Returns the active TTY id
+ * @return TTY id or -1 on error
+ */
+int tty_get_active(void);
 
 /**
  * Updates the TTY with the given character

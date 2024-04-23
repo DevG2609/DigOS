@@ -9,12 +9,18 @@
 #include <spede/stdio.h>
 #include <spede/string.h>
 
+#include "interrupts.h"
 #include "kernel.h"
+#include "scheduler.h"
+#include "trapframe.h"
 #include "vga.h"
 
 #ifndef KERNEL_LOG_LEVEL_DEFAULT
 #define KERNEL_LOG_LEVEL_DEFAULT KERNEL_LOG_LEVEL_DEBUG
 #endif
+
+// Global pointer to the current active process entry
+proc_t *active_proc = NULL;
 
 // Current log level
 int kernel_log_level = KERNEL_LOG_LEVEL_DEFAULT;
@@ -215,4 +221,28 @@ void kernel_exit(void) {
 
     // Exit
     exit(0);
+}
+
+/**
+ * Kernel context entry point
+ * @param trapframe - pointer to the current process' trapframe
+ */
+void kernel_context_enter(trapframe_t *trapframe) {
+    if (active_proc) {
+        // Save the currently running trapframe
+        active_proc->trapframe = trapframe;
+    }
+
+    // Process the interrupt that occurred
+    interrupts_irq_handler(trapframe->interrupt);
+
+    // Run the scheduler
+    scheduler_run();
+
+    if (!active_proc) {
+        kernel_panic("No active process!");
+    }
+
+    // Exit the kernel context
+    kernel_context_exit(active_proc->trapframe);
 }

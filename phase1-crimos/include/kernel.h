@@ -7,7 +7,13 @@
 #ifndef KERNEL_H
 #define KERNEL_H
 
+#define KSTACK_SIZE 16384   // Kernel Stack Size
+#define KCODE_SEG   0x08    // Kernel Code Segment
+#define KDATA_SEG   0x10    // Kernel Data Segment
+
 #ifndef ASSEMBLER
+
+#include "kproc.h"
 
 #ifndef OS_NAME
 #define OS_NAME "MyOS"
@@ -23,6 +29,9 @@ typedef enum log_level {
     KERNEL_LOG_LEVEL_TRACE, // Log trace, debug, info, warnings, and errors
     KERNEL_LOG_LEVEL_ALL    // Log everything!
 } log_level_t;
+
+// Global pointer to the current active process entry
+extern proc_t *active_proc;
 
 /**
  * Kernel initialization
@@ -103,6 +112,25 @@ int kernel_set_log_level(int level);
  * Exits the kernel
  */
 void kernel_exit(void);
+
+/**
+ * Kernel entrypoint
+ *
+ * This is the primary entry point for the kernel. It is only
+ * entered when an interrupt occurs. When it is entered, the
+ * process context must be saved. Any kernel processing (such as
+ * interrupt handling) is performed before finally exiting the
+ * kernel context to restore the proces state.
+ */
+void kernel_context_enter(trapframe_t *trapframe);
+
+/* The following functions are written directly in assembly */
+__BEGIN_DECLS
+/**
+ * Exits the kernel context and restores the process context
+ */
+extern void kernel_context_exit();
+__END_DECLS
 
 #endif
 #endif

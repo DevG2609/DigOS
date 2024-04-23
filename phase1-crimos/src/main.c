@@ -5,13 +5,15 @@
  * Operating system entry point
  */
 
+#include <spede/stdbool.h>
 #include "interrupts.h"
 #include "kernel.h"
 #include "keyboard.h"
 #include "timer.h"
 #include "tty.h"
 #include "vga.h"
-
+#include "scheduler.h"
+#include "kproc.h"
 #include "test.h"
 
 int main(void) {
@@ -32,6 +34,12 @@ int main(void) {
 
     // Initialize the keyboard driver
     keyboard_init();
+
+    // Initialize processes
+    kproc_init();
+
+    // Initialize the scheduler
+    scheduler_init();
 
     // Test initialization
     test_init();
