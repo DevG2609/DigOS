@@ -8,14 +8,17 @@
 #define KPROC_H
 
 #include "trapframe.h"
+#include "ringbuf.h"
+#include "queue.h"
 
 #ifndef PROC_MAX
 #define PROC_MAX        10   // maximum number of processes to support
 #endif
 
+#define PROC_IO_MAX     4    // Maximum process I/O buffers
+
 #define PROC_NAME_LEN   32   // Maximum length of a process name
 #define PROC_STACK_SIZE 8192 // Process stack size
-
 
 // Process types
 typedef enum proc_type_t {
@@ -29,25 +32,31 @@ typedef enum proc_type_t {
 typedef enum state_t {
     NONE,               // Process has no state (doesn't exist)
     IDLE,               // Process is idle (not scheduled)
-    ACTIVE              // Process is active (scheduled)
+    ACTIVE,             // Process is active (scheduled)
+    SLEEPING            // Process is sleeping (not scheduled)
 } state_t;
 
 
 // Process control block
 // Contains all details to describe a process
 typedef struct proc_t {
-    int pid;                  // Process id
-    state_t state;            // Process state
-    proc_type_t type;         // Process type (kernel or user)
+    int pid;                        // Process id
+    state_t state;                  // Process state
+    proc_type_t type;               // Process type (kernel or user)
 
-    char name[PROC_NAME_LEN]; // Process name
+    char name[PROC_NAME_LEN];       // Process name
 
-    int start_time;           // Time started
-    int run_time;             // Total run time of the process
-    int cpu_time;             // Current CPU time the process has used
+    int start_time;                 // Time started
+    int run_time;                   // Total run time of the process
+    int cpu_time;                   // Current CPU time the process has used
+    int sleep_time;                 // Time that a process should be sleeping
 
-    unsigned char *stack;     // Pointer to the process stack
-    trapframe_t *trapframe;   // Pointer to the trapframe
+    queue_t *scheduler_queue;       // Pointer to the queue where the process resides
+
+    ringbuf_t *io[PROC_IO_MAX];     // Process input/output buffers
+
+    unsigned char *stack;           // Pointer to the process stack
+    trapframe_t *trapframe;         // Pointer to the trapframe
 } proc_t;
 
 
@@ -93,6 +102,8 @@ proc_t *pid_to_proc(int pid);
  * @return pointer to the process entry, NULL or error or if not found
  */
 proc_t *entry_to_proc(int entry);
+
+void kproc_attach(int pid, int driver, int id);
 
 /**
  * Test process

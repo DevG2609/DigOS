@@ -12,7 +12,7 @@
 #define KDATA_SEG   0x10    // Kernel Data Segment
 
 #ifndef ASSEMBLER
-
+#include <spede/machine/asmacros.h>
 #include "kproc.h"
 
 #ifndef OS_NAME

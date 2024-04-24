@@ -119,35 +119,25 @@ void interrupts_irq_register(int irq, void (*entry)(), void (*handler)()) {
  * @note IRQs > 0xf will be remapped
  */
 void pic_irq_enable(int irq) {
-    // Determine the PIC to be used and adjust the irq number
-    // Read the current mask from the data port
-    // check the associated bit and return if the IRQ is enabled
-
     int port = PIC1_DATA;
     int mask;
 
     // Isolate only the first nibble; handles remapping
-    // Remember irq is 0 to 15 (0 to F) so we want to make sure
-    // irq only contains 0 to 15 and nothing larger. 
     irq &= 0xf;
 
     // Select the secondary PIC if the IRQ is associated with it
     if (irq >= 0x8) {
         port = PIC2_DATA;
-        irq -= 0x8; // Remeber each PIC has address 0 to 7, so if
-                    // it's the second pic, we need to subtract
-                    // 8 to get the real value for pic2
+        irq -= 0x8;
     }
 
     // Read the current mask
     mask = inportb(port);
 
-    // Set the IRQ. Breaking down the following line of code:
-    //  Shift 1 left by irq positions because we are enabling a single bit from 0 to 7, not the number 
-    //      represented by irq (ex: irq of 2 is 11 in binary)
-    //  Invert the value (0 enables, 1 disables)
-    //  Set mask = mask & InvertedValue 
+    // Set the IRQ
     mask &= ~(1 << irq);
+
+    outportb(port, mask);
 
     // Write the mask out to the PIC
     outportb(port, mask);
@@ -177,10 +167,7 @@ void pic_irq_disable(int irq) {
     // Read the current mask
     mask = inportb(port);
 
-    // Set the bit in the mask to disable the IRQ. Breaking down the following line of code:
-    //  Shift 1 left by irq positions because we are enabling a single bit from 0 to 7, not the number 
-    //      represented by irq (ex: irq of 2 is 11 in binary)
-    //  Perform OR operation with mask because we want to set 1 to disable the irq at irq value based in
+    // Set the bit in the mask to disable the IRQ
     mask = 0xff & (mask ^ (1 << irq));
 
     // Write the mask back to the PIC
@@ -206,17 +193,12 @@ int pic_irq_enabled(int irq) {
     // Determine the PIC to be used and adjust the irq number
     if (irq >= 0x8) {
         port = PIC2_DATA;
-        irq -= 0x8;  // pic2 would need to be offset 
+        irq -= 0x8;
     }
 
     // Read the current mask
     mask = inportb(port);
 
-    // Breaking down this line of code
-    //  ? is a ternary operator... Returns a 0 or 1 based on the result of the expression
-    //  Perform bitwise AND between mask and (1 << irq)
-    //      If result is non-zero (bit at position irq in mask is set), return 0. Remember 1 for pic means disabled.
-    //      If result is 0 (bit at position irq in max is not set), return 1
     return (mask & (1 << irq)) ? 0 : 1;
 }
 
@@ -237,8 +219,7 @@ void pic_irq_dismiss(int irq) {
         outportb(PIC2_CMD, PIC_EOI);
     }
 
-    // Send EOI to the primary PIC (remember that even if irq is from pic2, EOI also needs 
-    // to be sent to pic1)
+    // Send EOI to the primary PIC
     outportb(PIC1_CMD, PIC_EOI);
 }
 
@@ -251,7 +232,6 @@ void interrupts_init() {
     // Obtain the IDT base address
     idt = get_idt_base();
 
-    // Set irq_handlers table (array of function pointers) to 0
     memset(irq_handlers, 0, sizeof(irq_handlers));
 }
 

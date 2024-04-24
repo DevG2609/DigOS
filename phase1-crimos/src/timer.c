@@ -1,6 +1,7 @@
 /**
  * CPE/CSC 159 - Operating System Pragmatics
  * California State University, Sacramento
+ * 
  *
  * Timer Implementation
  */
@@ -32,7 +33,7 @@ int timer_ticks;
 timer_t timers[TIMERS_MAX];
 
 // Timer allocator; used to allocate indexes into the timers table
-queue_t timer_allocator; // Struct contains head, tail, size, items[]
+queue_t timer_allocator;
 
 
 /**
@@ -47,27 +48,23 @@ int timer_callback_register(void (*func_ptr)(), int interval, int repeat) {
     int timer_id = -1;
     timer_t *timer;
 
-    // Ensure a pointer was passed... You never know with programmers. 
     if (!func_ptr) {
         kernel_log_error("timer: invalid function pointer");
         return -1;
     }
 
-    // Obtain a timer id from queue
+    // Obtain a timer id
     if (queue_out(&timer_allocator, &timer_id) != 0) {
         kernel_log_error("timer: unable to allocate a timer");
         return -1;
     }
 
-    // set local timer var to a timer at timer_id position
     timer = &timers[timer_id];
-    
-    // Now save func_ptr to callback var along with interval and repeat
+
     timer->callback = func_ptr;
     timer->interval = interval;
     timer->repeat = repeat;
 
-    // Return timer_id to the calling function
     return timer_id;
 }
 
@@ -85,12 +82,9 @@ int timer_callback_unregister(int id) {
         return -1;
     }
 
-    // Set local timer pointer to address of the timer being unregistered 
     timer = &timers[id];
-    // Clear out memory for the timer 
     memset(timer, 0, sizeof(timer_t));
 
-    // Clear up space in the queue
     if (queue_in(&timer_allocator, id) != 0) {
         kernel_log_error("timer: unable to queue timer entry back to allocator");
         return -1;
@@ -125,7 +119,6 @@ void timer_irq_handler(void) {
 
     // Iterate through the timers table
     for (int i = 0; i < TIMERS_MAX; i++) {
-        // Load up first timer into local var 
         timer = &timers[i];
 
         // If we have a valid callback, check if it needs to be called
@@ -136,10 +129,12 @@ void timer_irq_handler(void) {
             }
 
             // If the timer repeat is greater than 0, decrement
+            // If the timer repeat is equal to 0, unregister the timer
+            // If the timer repeat is less than 0, do nothing
+
             if (timer->repeat > 0) {
                 timer->repeat--;
             } else if (timer->repeat == 0) {
-                // If the timer repeat is equal to 0, unregister the timer
                 timer_callback_unregister(i);
             }
         }
@@ -162,8 +157,6 @@ void timer_init(void) {
     queue_init(&timer_allocator);
 
     // Populate items into the allocator queue
-    // Or, another way of looking at it, populating queue with the max
-    // number of timers we want to allow in our OS. 
     for (int i = 0; i < TIMERS_MAX; i++) {
         if (queue_in(&timer_allocator, i) != 0) {
             kernel_log_warn("timer: unable to queue timer allocator %d", i);
@@ -171,8 +164,6 @@ void timer_init(void) {
     }
 
     // Register the Timer IRQ
-    // Note: isr_entry_timer is from interrupts.h and timer_irq_handler 
-    // is our function above.
     interrupts_irq_register(IRQ_TIMER, isr_entry_timer, timer_irq_handler);
 }
 

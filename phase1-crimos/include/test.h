@@ -85,6 +85,11 @@ void test_proc_list(void) {
                 fg_color = VGA_COLOR_GREEN;
                 break;
 
+            case SLEEPING:
+                state = 'S';
+                fg_color = VGA_COLOR_YELLOW;
+                break;
+
             default:
                 state = '?';
                 break;

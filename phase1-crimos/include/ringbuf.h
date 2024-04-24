@@ -12,7 +12,7 @@
 #include <spede/stddef.h>     // For size_t
 
 #ifndef RINGBUF_SIZE
-#define RINGBUF_SIZE 1024
+#define RINGBUF_SIZE 2048
 #endif
 
 typedef struct ringbuf_t {

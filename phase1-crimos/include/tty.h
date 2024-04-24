@@ -1,18 +1,21 @@
 /**
  * CPE/CSC 159 - Operating System Pragmatics
  * California State University, Sacramento
+ * 
  *
  * TTY Definitions
  */
 #ifndef TTY_H
 #define TTY_H
 
+#include "kproc.h"
+
 #ifndef TTY_MAX
 #define TTY_MAX         10  // Maximum number of TTYs to support
 #endif
 
 #ifndef TTY_SCROLLBACK
-#define TTY_SCROLLBACK  0   // Number of lines in the scrollback buffer. 0 if not implemented.
+#define TTY_SCROLLBACK  0   // Number of lines in the scrollback buffer
 #endif
 
 #define TTY_WIDTH       80  // Width of the TTY
@@ -36,10 +39,12 @@ typedef struct tty_t {
     int pos_x;                  // current x position in the screen
     int pos_y;                  // current y position in the screen
 
-    int pos_scroll;             // Current scrollback position in the buffer 
-                                // If you choose to implement scrollbac, ensure that 
-                                // the text on each row will "scroll" upwareds when the last
-                                // row/column is reached
+    int pos_scroll;             // Current scrollback position in the buffer
+
+    int echo;                   // If the TTY should echo or not
+
+    ringbuf_t io_input;         // Input buffer
+    ringbuf_t io_output;        // Output buffer
 } tty_t;
 
 /**
@@ -60,8 +65,25 @@ void tty_select(int tty);
  */
 int tty_get_active(void);
 
+
+/**
+ * Returns the tty structure for the given tty number
+ * @param tty_number - tty number/identifier
+ * @return NULL on error or pointer to entry in the tty table
+ */
+struct tty_t *tty_get(int tty);
+
+/**
+ * Write a character into the TTY process input buffer
+ * If the echo flag is set, will also write the character into the TTY
+ * process output buffer
+ * @param c - character to write into the input buffer
+ */
+void tty_input(char c);
+
 /**
  * Updates the TTY with the given character
+ * @param c - character to update on the TTY screen output
  */
 void tty_update(char c);
 

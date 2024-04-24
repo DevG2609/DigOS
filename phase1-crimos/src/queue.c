@@ -1,6 +1,7 @@
 /**
  * CPE/CSC 159 - Operating System Pragmatics
  * California State University, Sacramento
+ * 
  *
  * Simple circular queue implementation
  */
@@ -96,4 +97,13 @@ int queue_out(queue_t *queue, int *item) {
     queue->size--;
 
     return 0;
+}
+
+/**
+ * Indicates if the queue is empty
+ * @param queue - pointer to the queue structure
+ * @return true if empty, false if not empty
+ */
+bool queue_is_empty(queue_t *queue) {
+    return queue->size == 0;
 }

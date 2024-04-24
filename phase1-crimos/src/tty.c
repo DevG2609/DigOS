@@ -1,6 +1,7 @@
 /**
  * CPE/CSC 159 - Operating System Pragmatics
  * California State University, Sacramento
+ * 
  *
  * TTY Definitions
  */
@@ -23,17 +24,13 @@ struct tty_t *active_tty;
  * @param tty - TTY number
  */
 void tty_select(int n) {
-
-    // Ensure n is within the tty range
     if (n < 0 || n >= TTY_MAX) {
         kernel_panic("Invalid TTY %d", n);
     }
 
-    // Set the active tty to the n table entry 
     active_tty = &tty_table[n];
     kernel_log_info("tty[%d]: selected", n);
 
-    // Indicate that a refresh is needed
     active_tty->refresh = 1;
 }
 
@@ -42,49 +39,60 @@ void tty_select(int n) {
  * @return TTY id or -1 on error
  */
 int tty_get_active(void) {
-
-    // If there isn't an active tty, return -1
     if (!active_tty) {
         return -1;
     }
 
-    // Return the id of the active tty
     return active_tty->id;
+}
+
+/**
+ * Returns a pointer to the specified TTY table entry
+ * @param tty - TTY id
+ * @return pointer to TTY table entry
+ */
+struct tty_t *tty_get(int tty) {
+     if (tty >= 0 && tty < TTY_MAX) {
+        return &tty_table[tty];
+    }
+    return NULL;
 }
 
 /**
  * Refreshes the tty if needed
  */
 void tty_refresh(void) {
-
-    // Ensure that a tty is active, otherwise nothing to refresh
     if (!active_tty) {
         kernel_panic("No TTY is selected!");
         return;
     }
 
-    // Set a pointer to the active tty 
     struct tty_t *tty = active_tty;
 
-    // Check if a refresh is needed 
+    // Handle new I/O (characters in the output buffer)
+    // while not ringbuf_is_empty
+        // Read next character from ring buffer
+        // Send next characture to the tty screen buffer
+    while (!ringbuf_is_empty(&tty->io_output)) {
+        char c;
+        ringbuf_read(&tty->io_output, &c);
+        tty_update(c);
+    }
+
+
     if (tty->refresh) {
-        kernel_log_debug("tty[%d]: refreshing", tty->id);
+
+        kernel_log_trace("tty[%d]: refreshing", tty->id);
 
         int x = 0;
         int y = 0;
 
-        // Remember that x,y is our interpretation of a list of addresses
-        // Therefore we need to go through from 0 to TTY_WIDTH * TTY_HEIGHT to cover all addresses
-        // This goes through the entire display, character by character, to refresh display
         for (int i = 0; i < TTY_WIDTH * TTY_HEIGHT; i++) {
-            // If x position has exceeded the width, return to position 0 and move to next row
             if (x >= VGA_WIDTH) {
-                x = 0;  // Return x to 0
-                y++;    // Move to next row
+                x = 0;
+                y++;
             }
 
-            // Use the easy-to-use vga_putc_at to write the character
-            // This is writing at x,y coordinates the next i value in our tty buffer. 
             vga_putc_at(x++, y, tty->color_bg, tty->color_fg, tty->buf[tty->pos_scroll*TTY_WIDTH + i]);
         }
 
@@ -94,7 +102,27 @@ void tty_refresh(void) {
 }
 
 /**
- * Updates the active TTY with the given character
+ * Write a character into the TTY process input buffer
+ * If the echo flag is set, will also write the character into the TTY
+ * process output buffer
+ * @param c - character to write into the input buffer
+ */
+void tty_input(char c) {
+    if (!active_tty) {
+        return;
+    }
+
+    struct tty_t *tty = active_tty;
+    ringbuf_write(&tty->io_input, c);
+
+    if (tty->echo) {
+        ringbuf_write(&tty->io_output, c);
+    }
+}
+
+/**
+ * Updates the TTY with the given character
+ * @param c - character to update on the TTY screen output
  */
 void tty_update(char c) {
     if (!active_tty) {
@@ -107,11 +135,11 @@ void tty_update(char c) {
 //    kernel_log_debug("  before scroll=%d, x=%d, y=%d", tty->pos_scroll, tty->pos_x, tty->pos_y);
 
     switch (c) {
-        case '\t':  // Tab
+        case '\t':
             tty->pos_x += 4 - tty->pos_x % 4;
             break;
 
-        case '\b':  // Backspace
+        case '\b':
             if (tty->pos_x != 0) {
                 tty->pos_x--;
             } else if (tty->pos_y != 0) {
@@ -120,48 +148,35 @@ void tty_update(char c) {
             }
             break;
 
-        case '\r': // carriage return
+        case '\r':
             tty->pos_x = 0;
             break;
 
-        case '\n': // New Line
+        case '\n':
             tty->pos_y++;
             tty->pos_x = 0;
             break;
 
-        default: // Output a character 
-            // pos_scroll is not implemented in this assignment so it will be 0. Otherwise
-            // it will act like a y (row) offset and needs to be multiplied by TTY_WIDTH to 
-            // get to the correct row. 
-            // Second half of formula is as expected... x + y * width
+        default:
             tty->buf[(tty->pos_scroll * TTY_WIDTH) + (tty->pos_x + tty->pos_y * TTY_WIDTH)] = c;
-
-            // Advance pos_x to the next spot
             tty->pos_x++;
             break;
     }
 
-    // If pos_y exceeds height, need to scroll... This does NOT implement pos_scroll but 
-    // still scrolls.
     if (tty->pos_y >= TTY_HEIGHT) {
         int x;
         int y;
 
-        // For each column x...
         for (x = 0; x < TTY_WIDTH; x++) {
-            // Go through row by row...
-            for (y = 1; y < TTY_HEIGHT; y++) { // Yes, starting at 1 on purpose... 
-                // Copy current column/row into previous column/row
+            for (y = 1; y < TTY_HEIGHT; y++) {
                 tty->buf[TTY_WIDTH * (y - 1) + x] = tty->buf[TTY_WIDTH * y + x];
             }
         }
 
-        // Clear out last row (keep in mind that y is now at the last row)
         for (x = 0; x < TTY_WIDTH; x++) {
             tty->buf[TTY_WIDTH * (y - 1) + x] = ' ';
         }
 
-        // Set pos_y to the last row
         tty->pos_y = TTY_HEIGHT - 1;
     }
 
@@ -176,19 +191,13 @@ void tty_update(char c) {
 void tty_init(void) {
     kernel_log_info("tty: Initializing TTY driver");
 
-    // void *memset(void *dest, int c, size_t count);
-    // Set first count bytes of dest to the value c. Value of c is converted to
-    // an unsigned char. Remeber that memset sets the bytes in a block of memory
-    // whereas malloc is used to allocate a block of memory. 
-    // In this case:
-    //  Initializing tty_table to 0
     memset(tty_table, 0, sizeof(tty_table));
 
-    // Now fill in values for tty_table
     for (int i = 0; i < TTY_MAX; i++) {
         tty_table[i].id=i;
         tty_table[i].color_bg = VGA_COLOR_BLACK;
         tty_table[i].color_fg = VGA_COLOR_LIGHT_GREY;
+        tty_table[i].echo = 0;
     }
 
     // Select tty 0 to start with

@@ -1,6 +1,7 @@
 /**
  * CPE/CSC 159 Operating System Pragmatics
  * California State University, Sacramento
+ * 
  *
  * Operating system entry point
  */
@@ -14,6 +15,7 @@
 #include "vga.h"
 #include "scheduler.h"
 #include "kproc.h"
+#include "ksyscall.h"
 #include "test.h"
 
 int main(void) {
@@ -35,21 +37,26 @@ int main(void) {
     // Initialize the keyboard driver
     keyboard_init();
 
+    // Initialize the scheduler
+    scheduler_init();
+
     // Initialize processes
     kproc_init();
 
-    // Initialize the scheduler
-    scheduler_init();
+    // Initialize system calls
+    ksyscall_init();
 
     // Test initialization
     test_init();
 
     // Print a welcome message
+
     vga_printf("Welcome to %s!\n", OS_NAME);
     vga_puts("Press a key to continue...\n");
 
     // Wait for a key to be pressed
     keyboard_getc();
+
 
     // Clear the screen
     vga_clear();
